@@ -1252,6 +1252,8 @@ extern char    DAT_0055a434[];
 // RenderItemInfo string constants
 extern char    DAT_0055a4e0[];   // item name format string
 extern char    DAT_0055a5f4[];   // item stats header format string
+extern char    DAT_0055a4e4[];   // salto de linea — separador tras el precio
+extern char    DAT_0055a570[];   // salto de linea — separador tras el nombre
 extern char    DAT_0055a5f0[];   // salto de linea — separador de media altura
 extern char    DAT_0055a5fc[];   // salto de linea — separador de media altura
 extern char    DAT_0055a640[];   // salto de linea — separador de media altura
