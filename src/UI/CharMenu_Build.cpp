@@ -329,6 +329,10 @@ void FUN_004c3530(void)
 //   3 → (1.0,0.8,0.1)   4 → (0.1,1.0,0.5)   6 → (1.0,0.1,1.0)
 //   >6 → cae al default SIN tocar glColor (conserva el color de la línea previa)
 
+// Ancho real de los glifos al pintarse — definido en stubs_externs.cpp junto
+// al render de texto.  Ver la nota en el loop de medicion de FUN_004c2420.
+extern "C" int Text_MeasureGlyphRun(HDC hdc, const char *text, int len);
+
 // Los siete destinos del switch, en el orden de la jump table de 0x004c2860.
 static const float DrawItemInfoBox_glColor[7][3] = {
     { 1.0f, 1.0f, 1.0f },   // 0 → 0x004c272b
@@ -445,8 +449,11 @@ static float RenderText_0040fb70(int iPos_x, int iPos_y, const char *pszText,
     {
         const DWORD dwSavedBack = m_dwBackColor;
         m_dwBackColor = 0;
+        // Le pasamos iBoxWidth para que recorte lo que no entre en la caja,
+        // igual que el original al rasterizar a una textura de ese ancho.
         FUN_0040f610((HDC)(uintptr_t)DAT_055c9ff8,
-                     iPos_x + (int)(fVar4 / g_fScreenRate_x), iPos_y, pszText, 0);
+                     iPos_x + (int)(fVar4 / g_fScreenRate_x), iPos_y, pszText,
+                     (DWORD)(iBoxWidth > 0 ? iBoxWidth : 0));
         m_dwBackColor = dwSavedBack;
     }
 
@@ -491,6 +498,27 @@ void __cdecl FUN_004c2420(int param_1, int param_2, int param_3,
             }
             SelectObject(m_hFontDC, pHVar9);
             GetTextExtentPointA(m_hFontDC, pCVar3, lstrlenA(pCVar3), &local_8);
+            {
+                // DESVIACIÓN NECESARIA (2026-08-18) — reporte de EmanuelCatania
+                // sobre el PR: las lineas largas se salian por la derecha del
+                // recuadro ("Suerte (tasa de exito de Jewel of Soul +25%)").
+                //
+                // El binario mide con GetTextExtentPointA y rasteriza con
+                // TextOutA: el MISMO GDI, asi que las dos cifras coinciden y la
+                // caja siempre cubre el texto.  Nuestro render pinta glifo a
+                // glifo con wglUseFontBitmaps, que avanza con el advance width
+                // de cada caracter e IGNORA el kerning que si entra en el
+                // extent de la cadena entera.  La diferencia se acumula y solo
+                // se nota en lineas largas.
+                //
+                // Dimensionamos con el MAYOR de las dos medidas: asi la caja
+                // nunca queda mas angosta que lo que el render va a pintar, sin
+                // inventar un margen arbitrario.
+                const int cxRun = Text_MeasureGlyphRun(m_hFontDC, pCVar3, lstrlenA(pCVar3));
+                if (local_8.cx < cxRun) {
+                    local_8.cx = cxRun;
+                }
+            }
             if (local_18 < (float)local_8.cx) {
                 local_18 = (float)local_8.cx;
             }

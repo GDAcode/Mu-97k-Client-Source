@@ -1332,7 +1332,33 @@ static int Text_ParseStyleMarkers(const char *src, char *dst, size_t dstCap,
     return n;
 }
 
-void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DWORD /*color_unused*/)
+// Ancho REAL que van a ocupar los glifos al pintarse.
+//
+// wglUseFontBitmaps avanza el raster position con el "advance width" de cada
+// glifo (GetCharWidth32A), mientras que GetTextExtentPointA mide la cadena
+// ENTERA teniendo en cuenta kerning y overhang.  Para cadenas cortas dan lo
+// mismo; en cadenas largas la diferencia se acumula caracter a caracter.
+//
+// En el binario esto no puede pasar: mide con GetTextExtentPointA y rasteriza
+// con TextOutA — el MISMO GDI —, asi que las dos cifras coinciden siempre.
+// Nuestro render de glifos es un desvio consciente, y esta funcion es lo que
+// permite dimensionar la caja con el criterio del render en vez del de GDI.
+extern "C" int Text_MeasureGlyphRun(HDC hdc, const char *text, int len)
+{
+    if (!hdc || !text || len <= 0) return 0;
+    int total = 0;
+    for (int i = 0; i < len; ++i) {
+        INT w = 0;
+        const UINT ch = (UINT)(unsigned char)text[i];
+        if (GetCharWidth32A(hdc, ch, ch, &w)) total += w;
+    }
+    return total;
+}
+
+// El 5o parametro NO es un color (el nombre viejo `color_unused` enganaba): es
+// el `iBoxWidth` que FUN_0047f7a0 viene arrastrando desde el caller, en PIXELES
+// REALES.  Los callers que no tienen caja pasan 0.
+void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DWORD iBoxWidth)
 {
     if (text == NULL || *text == '\0') return;
 
@@ -1367,6 +1393,35 @@ void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DW
     if (!hRC) return;
 
     HDC hFontDC = DAT_055c9fec;
+
+    // ── RECORTE A iBoxWidth ─────────────────────────────────────────────────
+    // El binario rasteriza la linea a una textura de ANCHO iBoxWidth
+    // (CUIRenderText_BakeTextTexture @0x0040FCD0: `iStack_260 = param_2; if
+    // (param_2 == 0) iStack_260 = sz.cx;`), asi que lo que no entra en la caja
+    // simplemente NO SE DIBUJA.  Nuestro render de glifos pintaba la cadena
+    // entera y las lineas largas se salian por la derecha del recuadro.
+    //
+    // Es una red de seguridad: con la caja bien dimensionada (ver
+    // Text_MeasureGlyphRun) el recorte no deberia dispararse nunca.
+    char clippedBuf[0x100];
+    if (iBoxWidth > 0 && hFontDC) {
+        const int len = (int)strlen(drawText);
+        if (len > 0 && Text_MeasureGlyphRun(hFontDC, drawText, len) > (int)iBoxWidth) {
+            int fit = 0, acc = 0;
+            while (fit < len && fit < (int)sizeof(clippedBuf) - 1) {
+                INT cw = 0;
+                const UINT ch = (UINT)(unsigned char)drawText[fit];
+                if (!GetCharWidth32A(hFontDC, ch, ch, &cw)) break;
+                if (acc + cw > (int)iBoxWidth) break;
+                acc += cw;
+                ++fit;
+            }
+            memcpy(clippedBuf, drawText, (size_t)fit);
+            clippedBuf[fit] = '\0';
+            drawText = clippedBuf;
+            if (*drawText == '\0') return;
+        }
+    }
     if (hFontDC == NULL) return;
 
     // ── FUENTE ACTIVA (fix 2026-07-20) ──────────────────────────────────────

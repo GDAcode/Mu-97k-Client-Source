@@ -73,3 +73,8 @@ compile_check.bat
 compile_globals.bat
 patch_pools.py
 csm_decode.py
+
+# Notas de trabajo locales (fork GDAcode) — no forman parte del upstream.
+CLAUDE.md
+DESCOBERTAS.md
+.claude/
