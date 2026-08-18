@@ -316,7 +316,8 @@ void FUN_004c3530(void)
 //   DAT_07ea7b10      (0x07EA7B10) TextBold, negrita por línea
 //   m_hFontDC         (0x055C9FEC) DC de medición
 //   DAT_055ca00c/010  g_hFont / g_hFontBold
-//   _DAT_055c9b70/74  g_fScreenRate_x / g_fScreenRate_y
+//   DAT_0056156c/70   ancho/alto del ortho 2D (de ahi sale la escala; ver
+//                     DrawBox_RateX/Y mas abajo)
 //   DAT_0056156c      WindowWidth
 //   m_dwBackColor     (0x00559C80) 0xff0000a0 SOLO para el color 5, si no 0
 //
@@ -332,6 +333,31 @@ void FUN_004c3530(void)
 // Ancho real de los glifos al pintarse — definido en stubs_externs.cpp junto
 // al render de texto.  Ver la nota en el loop de medicion de FUN_004c2420.
 extern "C" int Text_MeasureGlyphRun(HDC hdc, const char *text, int len);
+
+// Escala layout(640x480) -> unidades del ortho 2D.
+//
+// El binario usa g_fScreenRate_x/y (_DAT_055c9b70/74) porque ALLI esos factores
+// salen del mismo global que el ortho: g_ScreenW ES DAT_0056156c.  En el port
+// son dos variables distintas y pueden estar desincronizadas — Config_Load
+// escribe g_ScreenW mientras la ventana, el ortho y el viewport leen
+// DAT_0056156c —, y ademas _DAT_055c9b74 puede quedarse sin calcular.
+//
+// Derivarla del ORTHO REAL da el mismo numero que el binario cuando los globals
+// estan sincronizados, y sigue siendo el correcto cuando no lo estan: la caja
+// se dimensiona SIEMPRE en las mismas unidades en que se dibuja la geometria.
+// Asi el tooltip queda bien tanto en 640x480 como en cualquier otra resolucion,
+// sin depender de arreglos fuera de este archivo.
+static float DrawBox_RateX(void)
+{
+    const DWORD w = DAT_0056156c ? DAT_0056156c : 640;
+    return (float)w / 640.0f;
+}
+
+static float DrawBox_RateY(void)
+{
+    const DWORD h = DAT_00561570 ? DAT_00561570 : 480;
+    return (float)h / 480.0f;
+}
 
 // Los siete destinos del switch, en el orden de la jump table de 0x004c2860.
 static const float DrawItemInfoBox_glColor[7][3] = {
@@ -371,7 +397,7 @@ static const DWORD DrawItemInfoBox_TextColor[7] = {
 // DESVIACIÓN: el original rasteriza la línea a una textura de iBoxWidth px con
 // TextOutA desplazado fVar4 px dentro de ella (0x0040FCD0).  Nosotros pintamos
 // glifos directo en unidades del ortho, así que el desplazamiento se aplica
-// sobre la x, convertido de píxeles a ortho con g_fScreenRate_x.
+// sobre la x, convertido de píxeles a ortho con DrawBox_RateX().
 // OJO (armadilla 1 de CLAUDE.md): stubs_bulk_misc.cpp ya define un
 // `FUN_0040fb70` __fastcall que es un stub vacio (return 0.0f) y no lo llama
 // nadie.  Para no crear dos simbolos con el mismo nombre y distinta firma,
@@ -404,8 +430,8 @@ static float RenderText_0040fb70(int iPos_x, int iPos_y, const char *pszText,
         fVar4  = (float)(iBoxWidth - local_8.cx);
         iWidth = local_8.cx + (int)fVar4;
     }
-    if ((float)iMaxWidth < (float)iPos_x + (float)iWidth / g_fScreenRate_x) {
-        iPos_x = (int)((float)iMaxWidth - (float)iWidth / g_fScreenRate_x);
+    if ((float)iMaxWidth < (float)iPos_x + (float)iWidth / DrawBox_RateX()) {
+        iPos_x = (int)((float)iMaxWidth - (float)iWidth / DrawBox_RateX());
     }
     // Fondo de la linea (m_dwBackColor).  En el binario este nivel NO lo pinta:
     // CUIRenderText_BakeTextTexture (0x0040FCD0) rasteriza la linea a una
@@ -439,8 +465,8 @@ static float RenderText_0040fb70(int iPos_x, int iPos_y, const char *pszText,
                    (GLubyte)((m_dwBackColor >> 16) & 0xff),   // B
                    (GLubyte)((m_dwBackColor >> 24) & 0xff));  // A
         FUN_005124c0((float)iPos_x, (float)iPos_y,
-                     (float)iBoxWidth / g_fScreenRate_x,
-                     (float)local_8.cy / _DAT_055c9b74);
+                     (float)iBoxWidth / DrawBox_RateX(),
+                     (float)local_8.cy / DrawBox_RateY());
         glColor4fv(prevColor);
         // No volvemos a encender la textura: FUN_0040f610 la apaga por su
         // cuenta para los glifos, y dejarla apagada mantiene GL y cache de
@@ -452,15 +478,15 @@ static float RenderText_0040fb70(int iPos_x, int iPos_y, const char *pszText,
         // Le pasamos iBoxWidth para que recorte lo que no entre en la caja,
         // igual que el original al rasterizar a una textura de ese ancho.
         FUN_0040f610((HDC)(uintptr_t)DAT_055c9ff8,
-                     iPos_x + (int)(fVar4 / g_fScreenRate_x), iPos_y, pszText,
+                     iPos_x + (int)(fVar4 / DrawBox_RateX()), iPos_y, pszText,
                      (DWORD)(iBoxWidth > 0 ? iBoxWidth : 0));
         m_dwBackColor = dwSavedBack;
     }
 
     if (*pszText != '\n') {
-        return ((float)local_8.cy / _DAT_055c9b74) / 1.0f;
+        return ((float)local_8.cy / DrawBox_RateY()) / 1.0f;
     }
-    return ((float)local_8.cy / _DAT_055c9b74) / 2.0f;
+    return ((float)local_8.cy / DrawBox_RateY()) / 2.0f;
 }
 
 void __cdecl FUN_004c2420(int param_1, int param_2, int param_3,
@@ -536,19 +562,19 @@ void __cdecl FUN_004c2420(int param_1, int param_2, int param_3,
     }
     param_3 = iVar1;
     Height = ((float)local_14 * (float)local_8.cy * 0.5f + (float)(local_10 * local_8.cy)) /
-             (_DAT_055c9b74 * 0.9090909f);
+             (DrawBox_RateY() * 0.9090909f);
     FUN_00511680(1);                             // EnableAlphaTest
-    local_18 = local_18 / g_fScreenRate_x;
+    local_18 = local_18 / DrawBox_RateX();
     if (0 < param_4) {
-        local_18 = (float)param_4 / g_fScreenRate_x + (float)param_4 / g_fScreenRate_x;
+        local_18 = (float)param_4 / DrawBox_RateX() + (float)param_4 / DrawBox_RateX();
     }
     local_18 = local_18 + 4.0f;
     param_4 = (int)((float)param_1 - local_18 * 0.5f);   // el recuadro se CENTRA en param_1
     if (param_4 < 0) {
         param_4 = 0;
     }
-    if ((float)DAT_0056156c / g_fScreenRate_x < (float)param_4 + local_18) {
-        param_4 = (int)((float)DAT_0056156c / g_fScreenRate_x - local_18 - 1.0f);
+    if ((float)DAT_0056156c / DrawBox_RateX() < (float)param_4 + local_18) {
+        param_4 = (int)((float)DAT_0056156c / DrawBox_RateX() - local_18 - 1.0f);
     }
     if (param_6 == 1) {
         glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
@@ -578,10 +604,10 @@ void __cdecl FUN_004c2420(int param_1, int param_2, int param_3,
             if ((*pCVar3 == '\n') || ((*pCVar3 == ' ') && (pCVar3[1] == '\0'))) {
                 GetTextExtentPointA(m_hFontDC, pCVar3, lstrlenA(pCVar3), &local_8);
                 if (*pCVar3 == '\n') {
-                    fAdvance = ((float)local_8.cy / _DAT_055c9b74) / 2.0f;
+                    fAdvance = ((float)local_8.cy / DrawBox_RateY()) / 2.0f;
                 }
                 else {
-                    fAdvance = ((float)local_8.cy / _DAT_055c9b74) / 1.0f;
+                    fAdvance = ((float)local_8.cy / DrawBox_RateY()) / 1.0f;
                 }
             }
             else {
@@ -594,7 +620,7 @@ void __cdecl FUN_004c2420(int param_1, int param_2, int param_3,
                 }
                 m_dwBackColor = (DAT_07e91708[iVar1] != 5) ? 0 : 0xff0000a0;
                 fAdvance = RenderText_0040fb70((int)x, (int)y, pCVar3,
-                                        (int)((local_18 - 2.0f) * g_fScreenRate_x),
+                                        (int)((local_18 - 2.0f) * DrawBox_RateX()),
                                         param_5, 0x280);
             }
             y = y + fAdvance * 1.1f;
