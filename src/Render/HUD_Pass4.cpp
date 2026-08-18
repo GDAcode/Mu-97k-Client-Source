@@ -508,22 +508,22 @@ extern "C" void __cdecl RenderInputText(int x, int y, int Index)
     GetTextExtentPointA(m_hFontDC, Text, n, &TextSize);
     if (v7 > 0 && TextSize.cx > v7) TextSize.cx = v7;
 
-    // BUG-FIX 2026-07-19 (el caret `_` quedaba corto, ~80% del largo real):
-    // IDA divide TextSize.cx por g_fScreenRate_x para pasar de píxeles de
-    // ventana a ESPACIO-640, porque su `RenderText_1` delega en
-    //   CUIRenderText::RenderText(..., iBoxWidth, 0, iSort, lpTextSize, 640)
-    // y ese `640` hace que la clase reescale la x de espacio-640 a ventana.
-    // NUESTRO FUN_0047f7a0 llama a FUN_0040f610 directo, SIN ese reescalado:
-    // nuestro stack de texto ya trabaja en píxeles de ventana. Copiar la
-    // división tal cual encogía el offset por 1/g_fScreenRate_x (con 798 px de
-    // ancho: 640/798 = 0.80, exactamente lo que se veía).
-    // Guardamos el offset SIN dividir para posicionar el caret, y dejamos la
-    // división intacta en TextSize (que otros consumidores leen esperando el
-    // valor de IDA).
-    const LONG caretOffsetPx = TextSize.cx;   // píxeles de ventana
-
+    // IDA divide TextSize.cx por g_fScreenRate_x para pasar de PIXELES DE
+    // VENTANA a ESPACIO-640, que es donde vive la `x` del caller.  El caret se
+    // posiciona en x + ese offset ya convertido.
+    //
+    // 2026-08-18: un fix del 2026-07-19 habia SACADO la division a proposito
+    // ("nuestro FUN_0047f7a0 llama a FUN_0040f610 directo, sin reescalado:
+    // nuestro stack de texto ya trabaja en pixeles de ventana").  Eso dejo de
+    // ser cierto: FUN_0040f610 ahora convierte layout->ortho con FUN_00511950,
+    // igual que el binario.  Sumar pixeles de ventana a una x de espacio-640
+    // alejaba el caret del ultimo caracter por el factor g_fScreenRate_x (a
+    // 1280 de ancho, el doble de distancia).  Volvemos a la division del
+    // binario.
     TextSize.cx = (LONG)((double)TextSize.cx / g_fScreenRate_x);
     TextSize.cy = (LONG)((double)TextSize.cy / _DAT_055c9b74);
+
+    const LONG caretOffsetPx = TextSize.cx;   // espacio-640, igual que `x`
 
     if (Index == InputIndex) {
         int v9 = InputFrame % 2;

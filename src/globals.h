@@ -629,7 +629,7 @@ extern DWORD   DAT_07e016c0;   // target grid X (from ray cast or hover click)
 extern DWORD   DAT_07e016c4;   // target grid Y
 extern DWORD   DAT_07e109c8;   // hover NPC entity index (for pathfind target)
 extern DWORD   DAT_07db8708;   // hover target entity type (from entity+2)
-extern DWORD   DAT_07e113e4;   // name copy buffer (0x100 bytes per slot) for 2nd pass
+extern BYTE    DAT_07e113e4[5 * 256];   // historial de chat: 5 slots de 0x100 bytes
 
 // ── UI / HUD data (0x07e1xxxx – 0x07eaxxxx) ──────────────────────────────────
 extern DWORD  _DAT_07e118e4;   // player facing angle (float, sent in movement packets)
@@ -1192,8 +1192,8 @@ extern DWORD   DAT_0056169c;        // selected channel (port % 0x14 + 1)
 extern int     DAT_07e11d20;        // UI mode: 1=class-list-A, 2=class-list-B, 3=stats
 extern int     DAT_07e11d24;        // character class/subtype ID (range 0..0x1FF)
 extern char    lpString_07e90798[]; // string list buffer (100 bytes per entry, ~30 slots)
-extern int     DAT_07e91708[20];    // color flag array (20 ints = 80 bytes)
-extern int     DAT_07ea7b10;        // enabled flag array base (index by slot)
+extern int     DAT_07e91708[30];    // TextListColor @0x07E91708 — color por linea
+extern int     DAT_07ea7b10[30];    // TextBold      @0x07EA7B10 — negrita por linea
 extern char    DAT_07d329c4;        // class name table A (first entry base)
 extern char    DAT_07d32af0;        // class info list A (stride 300, limit 0x7d34134)
 extern char    DAT_07d34134;        // class name table B (first entry base)
@@ -1252,7 +1252,9 @@ extern char    DAT_0055a434[];
 // RenderItemInfo string constants
 extern char    DAT_0055a4e0[];   // item name format string
 extern char    DAT_0055a5f4[];   // item stats header format string
-extern char    DAT_0055a5fc[];   // item class/type format string
+extern char    DAT_0055a5f0[];   // salto de linea — separador de media altura
+extern char    DAT_0055a5fc[];   // salto de linea — separador de media altura
+extern char    DAT_0055a640[];   // salto de linea — separador de media altura
 extern char    DAT_0055a608[];   // s__s__s format
 extern char    DAT_0055a630[];   // secondary stats line
 extern char    DAT_07d3b40c[];   // item level line format
@@ -2495,7 +2497,14 @@ extern char    g_lpszDialogAnswer[16][1][38]; // Quest dialog answer text lines
 // memory DC, declarado en stdafx.h). Tenerlos separados dejaba m_hFontDC en NULL
 // para siempre (125 usos, 0 asignaciones) -> GetTextExtentPoint32A fallaba.
 #define m_hFontDC  DAT_055c9fec
-extern HFONT   g_hFontBold;        // Bold font handle
+// g_hFontBold ES DAT_055ca010 - el unico global del binario.  WinMain paso 15
+// (0x0041E8A0) hace CreateFontA(...,700,...) y lo guarda ahi.
+// 2026-08-18: antes habia una HFONT propia inicializada a NULL y NUNCA
+// asignada.  Los ~40 `SelectObject(m_hFontDC, g_hFont/g_hFontBold)` del HUD
+// fallaban en silencio y el DC se quedaba con la fuente ANTERIOR, asi que cada
+// texto heredaba la del ultimo SelectObject que si funciono: de ahi los textos
+// que parpadean en negrita.  Mismo patron que m_dwTextColor y g_ScreenW.
+#define g_hFontBold  ((HFONT)(uintptr_t)DAT_055ca010)
 
 // Batch 18 — InitGame / ReceiveChat globals
 extern DWORD   EnableUse;          // item use enabled flag
@@ -2686,7 +2695,7 @@ extern char    SoccerTeamName[2][80];// team names
 
 // Globals de fuente / medición de texto que consumen sub_480C60 y el HUD
 // renderers (HFONT object handles + DC + computed dimensions).
-extern HFONT   g_hFont;              // primary plain font handle
+#define g_hFont      ((HFONT)(uintptr_t)DAT_055ca00c)   // ver nota en g_hFontBold
 extern int     FontHeight;           // pixel height of g_hFont
 extern SIZE    TextSize;             // shared scratch SIZE for text extent
 

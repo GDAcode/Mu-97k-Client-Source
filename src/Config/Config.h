@@ -24,8 +24,20 @@ int  Config_Load(void);
 int  Config_ReadServerAddr(void* pConfig, char* lpCmdLine, char* outIP, unsigned short* outPort);
 
 // Known globals (set by Config_Load):
-extern int   g_ScreenW;   // DAT_0056156c
-extern int   g_ScreenH;   // DAT_00561570
+//
+// 2026-08-18: g_ScreenW / g_ScreenH SON DAT_0056156c / DAT_00561570 — el mismo
+// global del binario (verificado en OpenInitFile @0x0041E388..0x0041E3EA: el
+// switch de Resolution escribe directo a 0x0056156C / 0x00561570).  Hasta hoy
+// el port tenia DOS memorias distintas: Config_Load escribia g_ScreenW y la
+// ventana, el ortho y el viewport leian DAT_0056156c, que se quedaba en 640x480
+// para siempre.  Por eso cambiar Resolution no hacia nada visible, y por eso
+// _DAT_055c9b70 (que sale de g_ScreenW) quedaba desincronizado del ortho — la
+// desincronizacion que documentan FUN_0040f610 y stubs_game.cpp:7492.
+// Misma unificacion por #define que ya se hizo con m_dwTextColor/DAT_00559c78.
+extern DWORD DAT_0056156c;
+extern DWORD DAT_00561570;
+#define g_ScreenW  DAT_0056156c
+#define g_ScreenH  DAT_00561570
 extern DWORD g_SoundOn;    // lpData_055c9fe8  (1 = sound on)
 // g_MusicOn es un ALIAS del unico global del binario, m_MusicOnOff @ 0x055C9E3C
 // (definido en globals.cpp). No declarar una variable propia aca: hasta 2026-08-17

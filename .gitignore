@@ -73,3 +73,12 @@ compile_check.bat
 compile_globals.bat
 patch_pools.py
 csm_decode.py
+
+# ─────────────────────────────────────────────────────────────
+#  Notas de trabajo locales (fork GDAcode) — NO se versionan.
+#  Son las directrices y el estado de RE de este fork; no forman
+#  parte del proyecto upstream y no deben salir en un PR.
+# ─────────────────────────────────────────────────────────────
+CLAUDE.md
+DESCOBERTAS.md
+.claude/

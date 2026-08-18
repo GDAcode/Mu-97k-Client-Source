@@ -611,8 +611,8 @@ void  __cdecl FUN_00511680(char mode);                             // GL_SetMode
 void  __cdecl FUN_00511710(void);                                  // Frame_UpdateTimer
 void  __cdecl FUN_00511790(void);
 void  __cdecl FUN_00511910(int, int, int, int);
-float10 __cdecl FUN_00511950(float);  // GL_sin or trig helper
-float10 __cdecl FUN_00511980(float);  // GL_cos or trig helper
+float10 __cdecl FUN_00511950(float);  // Layout X -> ortho X: DAT_0056156c * v / 640 (v * g_fScreenRate_x)
+float10 __cdecl FUN_00511980(float);  // Layout Y -> ortho Y: DAT_00561570 * v / 480 (v * g_fScreenRate_y)
 void  __cdecl FUN_005119b0(int x, int y, int w, int h);           // Viewport_Set
 void  __cdecl FUN_00511c10(float w, float h, float *rot_mat);     // SkillEffect_DrawBillboard
 void  __cdecl FUN_00511cf0(void);
@@ -710,7 +710,7 @@ void  __cdecl FUN_004afb00(void);        // Hover_ProcessClick
 char  __cdecl FUN_004e5980(void);        // SecondPassword_IsActive
 
 // ── Char menu builder helpers (FUN_004c3530) ──────────────────────────────────
-void  __cdecl FUN_004c2420(int, int, int, int, int, int);  // list UI init (mode, a, count, b, type, c)
+void  __cdecl FUN_004c2420(int, int, int, int, int, int);  // DrawItemInfoBox(x, y, count, fixedWidth, iSort, drawBox)
 void  __cdecl FUN_004c2880(int class_data_ptr);            // build class info block
 void  __cdecl FUN_004c2c10(int row, unsigned char *color, int *value, const char *label, int x, int flags); // draw stat row
 void  __cdecl FUN_004c2d50(int row, int value, int col_width); // draw value column

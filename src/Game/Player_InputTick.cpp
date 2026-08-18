@@ -574,11 +574,24 @@ void __cdecl FUN_004acef0(void)
         memcpy(DAT_07db8810, nameSrc, 0x40);
 
         // Stage through DAT_07e113e4 slot (iVar19 = DAT_00559c50 * 0x100)
-        memcpy((void*)(DAT_07e113e4 + DAT_00559c50 * 0x100), nameSrc, 0x40);
+        //
+        // 2026-08-18: DAT_07e113e4 pasó a ser el array real (5 slots de 0x100).
+        // Antes era un DWORD suelto y esto usaba su VALOR como dirección — o sea
+        // escribía en (0 + índice*0x100), memoria ajena.
+        //
+        // DAT_00559c50 es el índice de ENTIDAD (0..399) y el buffer sólo tiene 5
+        // slots, así que el índice se acota.  El binario indexa igual; sin la
+        // cota escribiríamos fuera del array.
+        {
+            int slot = (int)DAT_00559c50;
+            if (slot < 0 || slot >= 5) slot = 0;
+            unsigned char *stage = DAT_07e113e4 + slot * 0x100;
+            memcpy(stage, nameSrc, 0x40);
 
-        // Pone en cero el buffer de contraseña y después copia de vuelta desde el slot preparado
-        memset(DAT_07db8810, 0, 0x40 * sizeof(DWORD));
-        memcpy(DAT_07db8810, (void*)(DAT_07e113e4 + DAT_00559c50 * 0x100), 0x40);
+            // Pone en cero el buffer de contraseña y después copia de vuelta desde el slot preparado
+            memset(DAT_07db8810, 0, 0x40 * sizeof(DWORD));
+            memcpy(DAT_07db8810, stage, 0x40);
+        }
 
         // Setea el largo de la contraseña y dispara el BGM 0x19
         DAT_07d780ac = (DWORD)strlen((char*)DAT_07db8810);

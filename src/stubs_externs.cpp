@@ -794,8 +794,8 @@ void __cdecl FUN_0040e330(unsigned long val) {
 extern "C++" {
 extern char    GlobalText[GLOBALTEXT_ROWS][300];   // ver globals.h
 extern char    lpString_07e90798[];
-extern int     DAT_07e91708[20];
-extern int     DAT_07ea7b10;
+extern int     DAT_07e91708[30];
+extern int     DAT_07ea7b10[30];
 extern HDC     m_hFontDC;
 extern float   _DAT_055c9b74;
 }
@@ -892,7 +892,7 @@ static void FUN_004c9730_old(float a1, int a2, int a3)
     char* TextList0 = lpString_07e90798;
     auto TextListN = [&](int i) -> char* { return lpString_07e90798 + i * 100; };
     int* TextListColor = DAT_07e91708;
-    int* TextBold = (&DAT_07ea7b10);
+    int* TextBold = DAT_07ea7b10;
 
     sprintf_s(TextList0, 100, "\n");
     sprintf_s(TextListN(1), 100, "%s", szName);
@@ -1055,94 +1055,102 @@ void __cdecl FUN_004c9730(float a1, int a2, int a3)
         }
     }
 
-    struct SkillTooltipLine {
-        char text[160];
-        DWORD color;
-        int bold;
+    // ── Build TextList lines ────────────────────────────────────────────────
+    // Estructura del binario (0x004C97xx, y el volcado de IDA que quedo en
+    // FUN_004c9730_old bajo `#if 0`):
+    //   slot 0 = "\n"                       (separador de media altura)
+    //   slot 1 = nombre de la skill         color 1 (azul claro), NEGRITA
+    //   slot 2 = "\n"
+    //   slot 3+ = dano / rango / mana / AG  color 0 (blanco)
+    //   opcional "no puede usarla"          color 5 (blanco con franja)
+    //   ultimo  = "\n"
+    //
+    // 2026-08-18: antes esto pintaba su PROPIA caja (cuarta reimplementacion
+    // inventada del tooltip, con colores ARGB y textos en ingles hardcodeados).
+    // Ahora usa lpString_07e90798 + FUN_004c2420, que es lo que hace el binario
+    // — misma rutina que el tooltip de item y el menu de personaje.
+    auto  TextListN     = [](int i) -> char* { return lpString_07e90798 + i * 100; };
+    auto  GlobalTextOr  = [](int idx, const char* fallback) -> const char* {
+        if (idx >= 0 && idx < GLOBALTEXT_ROWS && GlobalText[idx][0])
+            return GlobalText[idx];
+        return fallback;
     };
 
-    SkillTooltipLine lines[16] = {};
-    int lineCount = 0;
-    auto push_line = [&](DWORD color, int bold, const char* fmt, auto... args) {
-        if (lineCount >= 16) return;
-        _snprintf_s(lines[lineCount].text, sizeof(lines[lineCount].text), _TRUNCATE, fmt, args...);
-        lines[lineCount].color = color;
-        lines[lineCount].bold = bold;
-        lineCount++;
-    };
-
-    for (char* p = szName; *p; ++p) {
-        unsigned char ch = (unsigned char)*p;
-        if (ch < 32 || ch > 126) {
-            *p = ' ';
-        }
-    }
-    if (szName[0] == 0) {
-        _snprintf_s(szName, sizeof(szName), _TRUNCATE, "Skill %u", (unsigned)skillType);
+    int idx = 0;
+    for (int i = 0; i < 30; ++i) {
+        lpString_07e90798[i * 100] = 0;
     }
 
-    push_line(0xFFFFFF00u, 1, "%s", szName);
+    crt_sprintf(TextListN(idx), "\n");
+    DAT_07e91708[idx] = 0;
+    DAT_07ea7b10[idx] = 0;
+    idx++;
 
-    if (piMinDamage > 0 || piMaxDamage > 0)
-        push_line(0xFFFFFFFFu, 0, "Damage: %d ~ %d", piMinDamage, piMaxDamage);
+    _snprintf_s(TextListN(idx), 100, _TRUNCATE, "%s", szName);
+    DAT_07e91708[idx] = 1;
+    DAT_07ea7b10[idx] = 1;
+    idx++;
 
-    if (piDistance > 0) push_line(0xFFFFFFFFu, 0, "Range: %d", piDistance);
-    push_line(0xFFFFFFFFu, 0, "Mana: %d", piMana);
-    if (piSkillMana > 0) push_line(0xFFFFFFFFu, 0, "AG: %d", piSkillMana);
+    crt_sprintf(TextListN(idx), "\n");
+    DAT_07e91708[idx] = 0;
+    DAT_07ea7b10[idx] = 0;
+    idx++;
 
-    if (lineCount <= 0) return;
-
-    HDC hdc = m_hFontDC;
-    const int padX = 6;
-    const int padY = 4;
-    const int gapY = 2;
-    int maxWidth = 0;
-    int lineH = 14;
-
-    for (int i = 0; i < lineCount; ++i) {
-        if (hdc) {
-            SelectObject(hdc, lines[i].bold ? g_hFontBold : g_hFont);
-            TEXTMETRICA tm = {};
-            if (GetTextMetricsA(hdc, &tm)) {
-                lineH = tm.tmHeight + tm.tmExternalLeading;
-            }
-            SIZE sz = {};
-            if (GetTextExtentPointA(hdc, lines[i].text, (int)strlen(lines[i].text), &sz)) {
-                if (sz.cx > maxWidth) maxWidth = sz.cx;
-                continue;
-            }
-        }
-        int fallbackW = (int)strlen(lines[i].text) * 7;
-        if (fallbackW > maxWidth) maxWidth = fallbackW;
+    if (piMinDamage > 0 || piMaxDamage > 0) {
+        _snprintf_s(TextListN(idx), 100, _TRUNCATE,
+                    GlobalTextOr(170, "Wizardry Dmg:%d~%d"), piMinDamage, piMaxDamage);
+        DAT_07e91708[idx] = 0;
+        DAT_07ea7b10[idx] = 0;
+        idx++;
+    }
+    if (piDistance > 0) {
+        _snprintf_s(TextListN(idx), 100, _TRUNCATE,
+                    GlobalTextOr(174, "Range: %d"), piDistance);
+        DAT_07e91708[idx] = 0;
+        DAT_07ea7b10[idx] = 0;
+        idx++;
+    }
+    {
+        _snprintf_s(TextListN(idx), 100, _TRUNCATE,
+                    GlobalTextOr(175, "Mana: %d"), piMana);
+        DAT_07e91708[idx] = 0;
+        DAT_07ea7b10[idx] = 0;
+        idx++;
+    }
+    if (piSkillMana > 0) {
+        _snprintf_s(TextListN(idx), 100, _TRUNCATE,
+                    GlobalTextOr(360, "AG: %d"), piSkillMana);
+        DAT_07e91708[idx] = 0;
+        DAT_07ea7b10[idx] = 0;
+        idx++;
     }
 
-    const int boxW = maxWidth + padX * 2;
-    const int boxH = lineCount * lineH + (lineCount - 1) * gapY + padY * 2;
-    int drawX = skillTipX - boxW / 2;
-    int drawY = a2 - boxH - 8;
-    if (drawY < 0) drawY = a2 + 8;
-    if (drawX < 0) drawX = 0;
-    if (drawX + boxW > (int)WindowWidth) drawX = (int)WindowWidth - boxW;
-    if (drawX < 0) drawX = 0;
+    // DK (clase 1) con la skill 47: linea de "no puede usarla", color 5 — el
+    // unico color con franja de fondo (m_dwBackColor = 0xff0000a0).
+    if (Hero && ((*(BYTE*)((char*)Hero + 0x1BC) & 7) == 1) && skillType == 47) {
+        _snprintf_s(TextListN(idx), 100, _TRUNCATE, "%s", GlobalTextOr(96, ""));
+        DAT_07e91708[idx] = 5;
+        DAT_07ea7b10[idx] = 0;
+        idx++;
+    }
 
-    EnableAlphaTest(true);
-    glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-    FUN_005124c0((float)(drawX - 1), (float)(drawY - 1), (float)(boxW + 2), 1.0f);
-    FUN_005124c0((float)(drawX - 1), (float)(drawY + boxH), (float)(boxW + 2), 1.0f);
-    FUN_005124c0((float)(drawX - 1), (float)(drawY - 1), 1.0f, (float)(boxH + 2));
-    FUN_005124c0((float)(drawX + boxW), (float)(drawY - 1), 1.0f, (float)(boxH + 2));
-    glColor4f(0.0f, 0.0f, 0.0f, 0.82f);
-    FUN_005124c0((float)drawX, (float)drawY, (float)boxW, (float)boxH);
+    crt_sprintf(TextListN(idx), "\n");
+    DAT_07e91708[idx] = 0;
+    DAT_07ea7b10[idx] = 0;
+    idx++;
 
-    int lineY = drawY + padY;
-    for (int i = 0; i < lineCount; ++i) {
-        if (hdc) {
-            SelectObject(hdc, lines[i].bold ? g_hFontBold : g_hFont);
-        }
-        m_dwBackColor = 0;
-        DAT_00559c78 = lines[i].color;
-        RenderText(drawX + padX, lineY, lines[i].text, 0, 0, 0);
-        lineY += lineH + gapY;
+    // Posicion Y — port literal de 0x004C9DF7..0x004C9E36:
+    //   v31 = (count - 3) * cy + (3 * cy) / 2
+    //   y   = a2 - (int)(v31 / g_fScreenRate_y)
+    //   DrawItemInfoBox(x, y, count, 0, 2, 1)
+    {
+        SIZE sz;
+        sz.cx = 0;
+        sz.cy = 0;
+        GetTextExtentPointA(m_hFontDC, lpString_07e90798, 1, &sz);
+        int v31 = (idx - 3) * sz.cy + (3 * sz.cy) / 2;
+        int yBox = a2 - (int)((float)v31 / _DAT_055c9b74);
+        FUN_004c2420(skillTipX, yBox, idx, 0, 2, 1);
     }
 }
 
@@ -1180,15 +1188,31 @@ void __cdecl FUN_0047f7a0(int param_1, int param_2, char *param_3, int param_4, 
 
     int x = param_1;
 
-    // Aplicar centrado dentro del box [param_1, param_1+param_4].
-    // param_1 y param_4 están en unidades del ortho; el extent de GDI viene en
-    // píxeles de framebuffer.  Text_MeasureOrthoWidth hace la conversión (es el
-    // equivalente correcto del `sz.cx / g_fScreenRate_x` de IDA para nuestro
-    // pipeline).  Sin ella el texto quedaba descentrado hacia la izquierda.
+    // Alineación dentro del box, port de FUN_0040fb70 (0x0040FB70), que es a
+    // quien delega el original:
+    //     iSort 2 → offset = (iBoxWidth - sz.cx) / 2      (centrado)
+    //     iSort 3 → offset = (iBoxWidth - sz.cx)          (derecha)
+    //
+    // ⚠ UNIDADES — acá estaba el bug (2026-08-18).  `param_4` (iBoxWidth) llega
+    // en PIXELES REALES: los callers lo arman como `70 * WindowWidth / 0x280`
+    // (HUD_Pass6) o `(W-2) * g_fScreenRate_x` (DrawItemInfoBox).  Pero `param_1`
+    // es ESPACIO-640.  El codigo previo restaba un ancho en espacio-640 de un
+    // box en pixeles reales y sumaba el resultado a una x de espacio-640: a
+    // 640x480 daba igual porque rate = 1, pero a 1280 el texto de los paneles
+    // (tecla C, cabeceras del inventario) se iba hacia la derecha.
+    //
+    // El binario hace toda la cuenta en pixeles y recien despues convierte, asi
+    // que hacemos lo mismo: medir en pixeles, calcular el offset en pixeles y
+    // pasarlo a espacio-640 dividiendo por g_fScreenRate_x.
     if (param_5 >= 2 && param_4 > 0 && DAT_055c9fec) {
-        int textW = Text_MeasureOrthoWidth(param_3);
-        if (textW > 0 && textW < param_4) {
-            x = param_1 + (param_4 - textW) / 2;
+        SIZE szPx = {0, 0};
+        if (GetTextExtentPointA(DAT_055c9fec, param_3, (int)strlen(param_3), &szPx) &&
+            szPx.cx > 0 && szPx.cx < param_4) {
+            int offsetPx = (param_5 >= 3) ? (param_4 - szPx.cx)
+                                          : (param_4 - szPx.cx) / 2;
+            float rx = g_fScreenRate_x;
+            if (rx <= 0.0f) rx = 1.0f;
+            x = param_1 + (int)((float)offsetPx / rx);
         }
     }
 
@@ -1283,14 +1307,18 @@ void __cdecl FUN_0047fe30(void *param_1_v, int param_2, void *param_3_v, int par
 // distintas, y hay que dividir el extent por la relación viewport/ortho para
 // que el recuadro cubra exactamente las letras.
 //
-// Deliberadamente NO usamos `g_fScreenRate_x` (_DAT_055c9b70) ni
-// `FUN_00511950` para esto: son dos fuentes de escala que en nuestro build
-// están DESINCRONIZADAS.  `g_fScreenRate_x` sale de `g_ScreenW` (Config_Load),
-// mientras que el ortho y el viewport salen de `DAT_0056156c` — y son dos
-// variables separadas (globals.cpp:303 vs Config_Load.cpp:49), donde nada
-// copia una a la otra.  Preguntarle a OpenGL por su viewport es la única
-// fuente que no puede desincronizarse, y sigue siendo correcta si algún día
-// se unifican esos globals.
+// Esto es la relación VIEWPORT/ORTHO, y NO tiene nada que ver con
+// `g_fScreenRate_x` / `FUN_00511950`, que convierten layout(640x480) → ortho.
+// Son dos conversiones distintas y ambas hacen falta: FUN_00511950 para la
+// POSICIÓN que manda el caller, esta para los EXTENTS que mide GDI.
+//
+// 2026-08-18: el comentario que había acá decía que se evitaba
+// `g_fScreenRate_x` a propósito porque estaba DESINCRONIZADO del ortho —
+// `g_fScreenRate_x` salía de `g_ScreenW` y el ortho de `DAT_0056156c`, dos
+// variables separadas que nada copiaba.  Eso ya está arreglado: resultó que en
+// el binario son EL MISMO global y ahora están unificadas por #define (ver
+// Config.h).  El rodeo por glGetIntegerv sigue siendo el valor correcto para
+// los extents, así que se conserva.
 static void Text_PixelToOrthoScale(float* outX, float* outY)
 {
     *outX = 1.0f;
@@ -1305,10 +1333,16 @@ static void Text_PixelToOrthoScale(float* outX, float* outY)
     if (*outY <= 0.0f) *outY = 1.0f;
 }
 
-// Ancho del texto EN UNIDADES DEL ORTHO (que es donde vive todo el layout).
-// Es el equivalente correcto, para nuestro pipeline, del `sz.cx /
-// g_fScreenRate_x` que hace IDA en RenderText (0x47F650) y RenderTipText
-// (0x47F7F0).
+// Ancho del texto EN COORDENADAS DE LAYOUT (las de 640x480, que es donde vive
+// todo el posicionamiento de la UI).  GetTextExtentPointA mide en pixeles
+// reales, asi que se divide por g_fScreenRate_x — literalmente lo que hace el
+// binario en RenderText (0x47F650) y RenderTipText (0x47F7F0).
+//
+// 2026-08-18: antes dividia por la relacion viewport/ortho (Text_PixelToOrthoScale)
+// en vez de por g_fScreenRate_x.  Era un rodeo puesto cuando los dos globals
+// estaban desincronizados; ahora que Config_Load escribe DAT_0056156c de verdad,
+// la division correcta es la del binario.  Con la vuelta anterior el ancho salia
+// en pixeles reales (a 1280, el doble de lo que el layout espera).
 extern "C" int Text_MeasureOrthoWidth(const char* text)
 {
     if (!text || !*text) return 0;
@@ -1316,9 +1350,8 @@ extern "C" int Text_MeasureOrthoWidth(const char* text)
     if (!hFontDC) return 0;
     SIZE sz = {0, 0};
     if (!GetTextExtentPointA(hFontDC, text, (int)strlen(text), &sz)) return 0;
-    float sx, sy;
-    Text_PixelToOrthoScale(&sx, &sy);
-    return (int)((float)sz.cx / sx);
+    if (g_fScreenRate_x <= 0.0f) return sz.cx;
+    return (int)((float)sz.cx / g_fScreenRate_x);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1447,7 +1480,10 @@ static int Text_ParseStyleMarkers(const char *src, char *dst, size_t dstCap,
     return n;
 }
 
-void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DWORD /*color_unused*/)
+// El 5º parámetro NO es un color (el nombre viejo `color_unused` engañaba): es
+// el `iBoxWidth` que FUN_0047f7a0 viene arrastrando desde el caller, en PIXELES
+// REALES.  Los otros tres callers pasan 0.
+void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DWORD iBoxWidth)
 {
     if (text == NULL || *text == '\0') return;
 
@@ -1482,6 +1518,31 @@ void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DW
     if (!hRC) return;
 
     HDC hFontDC = DAT_055c9fec;
+
+    // ── RECORTE A iBoxWidth (2026-08-18) ────────────────────────────────────
+    // El binario rasteriza la linea a una textura de ANCHO iBoxWidth
+    // (CUIRenderText_BakeTextTexture @0x0040FCD0: `iStack_260 = param_2`), asi
+    // que lo que no entra en la caja simplemente NO SE DIBUJA.  Nuestro render
+    // de glifos pintaba la cadena entera: en el campo de chat, un texto mas
+    // largo que InputTextWidth se derramaba fuera del recuadro y aparecia
+    // encima de la barra de experiencia.
+    char clippedBuf[0x100];
+    if (iBoxWidth > 0 && hFontDC) {
+        int len = (int)strlen(drawText);
+        if (len > 0) {
+            INT  fit = 0;
+            SIZE szAll = {0, 0};
+            if (GetTextExtentExPointA(hFontDC, drawText, len, (int)iBoxWidth,
+                                      &fit, NULL, &szAll) &&
+                fit < len) {
+                if (fit > (int)sizeof(clippedBuf) - 1) fit = (int)sizeof(clippedBuf) - 1;
+                memcpy(clippedBuf, drawText, (size_t)fit);
+                clippedBuf[fit] = '\0';
+                drawText = clippedBuf;
+                if (*drawText == '\0') return;
+            }
+        }
+    }
     if (hFontDC == NULL) return;
 
     // ── FUENTE ACTIVA (fix 2026-07-20) ──────────────────────────────────────
@@ -1546,10 +1607,32 @@ void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DW
     const GLuint s_fontListBase = s_cache[slot].base;
     const int    s_ascent       = s_cache[slot].ascent;
 
-    // Y-flip: game pasa y con top=0, ortho GL usa bottom=0.
+    // ── LAYOUT-SPACE → ORTHO-SPACE (fix 2026-08-18) ─────────────────────────
+    // Todo el layout del juego se escribe en coordenadas de 640x480, y el ortho
+    // 2D es 0..DAT_0056156c x 0..DAT_00561570 (o sea, PIXELES REALES).  Quien
+    // convierte entre los dos es FUN_00511950 / FUN_00511980:
+    //     FUN_00511950(v) = DAT_0056156c * v / 640   (= v * g_fScreenRate_x)
+    //     FUN_00511980(v) = DAT_00561570 * v / 480   (= v * g_fScreenRate_y)
+    // FUN_005124c0 (rects) ya las usa; este render de texto NO las usaba y
+    // trataba la x/y del caller como si ya fuera ortho.
+    //
+    // Pasaba desapercibido porque la escala era siempre 1.0: Config_Load
+    // escribia g_ScreenW pero NUNCA DAT_0056156c, asi que el ortho se quedaba
+    // en 640x480 pasara lo que pasara.  Arreglado eso (ver Config.h), la
+    // resolucion por fin cambia y el texto quedaba a la mitad de su posicion.
     extern DWORD DAT_00561570;  // alto del ortho 2D
+    const float xOrtho = (float)FUN_00511950((float)x);
+    const float yOrtho = (float)FUN_00511980((float)y);
+
+    // Escala pixeles de framebuffer → unidades del ortho (viewport/ortho), que
+    // es OTRA cosa que la conversion de arriba: esta corrige los EXTENTS que
+    // mide GDI y que blitea glBitmap, no la posicion del layout.
+    float sx_glyph, sy_glyph;
+    Text_PixelToOrthoScale(&sx_glyph, &sy_glyph);
+
+    // Y-flip: game pasa y con top=0, ortho GL usa bottom=0.
     DWORD vh = DAT_00561570 ? DAT_00561570 : 480;
-    int   rasterY = (int)vh - y - s_ascent;
+    float rasterY = (float)vh - yOrtho - (float)s_ascent / sy_glyph;
 
     // Color base desde DAT_00559c78 (COLORREF 0x00BBGGRR + opcional alpha en
     // byte 3).  Con marcadores presentes esto es solo el color del PRIMER tramo;
@@ -1586,8 +1669,7 @@ void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DW
     // del tramo; por eso los mensajes del chat salían sin su recuadro.
     // Formato 0xAABBGGRR igual que el color de texto.  Alpha 0 = sin fondo.
     {
-        float sx, sy;
-        Text_PixelToOrthoScale(&sx, &sy);
+        const float sx = sx_glyph, sy = sy_glyph;
 
         const int drawLen = (int)strlen(drawText);
         const int nRuns   = nMarkers + 1;
@@ -1605,7 +1687,7 @@ void __cdecl FUN_0040f610(HDC /*hdc_unused*/, int x, int y, const char *text, DW
             DWORD fg    = (run == 0) ? DAT_00559c78 : markers[run - 1].fg;
             DWORD bc    = (run == 0) ? DAT_00559c80 : markers[run - 1].bg;
             int   runPx = (run == 0) ? 0            : markers[run - 1].pixelStart;
-            float runX  = (float)x + (float)runPx / sx;
+            float runX  = xOrtho + (float)runPx / sx;
 
             SIZE bsz = {0, 0};
             BOOL haveExtent = GetTextExtentPointA(hFontDC, drawText + startChar,

@@ -46,8 +46,9 @@
 #include "Config/Config.h"
 
 // Globals set by Config_Load
-int   g_ScreenW    = 640;    // DAT_0056156c
-int   g_ScreenH    = 480;    // DAT_00561570
+// g_ScreenW / g_ScreenH NO se definen aca: son macro-alias de
+// DAT_0056156c / DAT_00561570 (globals.cpp), que es el unico global del
+// binario.  Ver la nota en Config.h.
 DWORD g_SoundOn    = 1;      // DAT_?? (default 1 = sound on)
 // g_MusicOn NO se define aca: es un macro-alias de m_MusicOnOff (0x055C9E3C),
 // que vive en globals.cpp. Ver la nota en Config.h.
@@ -141,10 +142,18 @@ int Config_Load(void)
     case 4: g_ScreenW = 1600; g_ScreenH = 1200; break;
     }
 
-    // --- 6. UV normalization scalar (used throughout renderer for 640x480-relative coords) ---
-    //   _DAT_055c9b70 = (float)g_ScreenW * (1.0f / 640.0f)
+    // --- 6. UV normalization scalars (used throughout renderer for 640x480-relative coords) ---
+    //   _DAT_055c9b70 = (float)g_ScreenW * (1.0f / 640.0f)   [0x0041E40C, cte 0x0055283C]
+    //   _DAT_055c9b74 = (float)g_ScreenH * (1.0f / 480.0f)   [0x0041E422, cte 0x00552838]
     //   e.g. 640→1.0, 800→1.25, 1024→1.6, etc.
+    //
+    // 2026-08-18: faltaba la segunda.  g_fScreenRate_y se quedaba en 1.0 para
+    // toda resolucion, asi que cualquier layout que convierta pixeles a
+    // unidades del ortho por el eje Y salia escalado por g_ScreenH/480 (a
+    // 1280x1024, 2.13x).  Se veia en el tooltip de item: DrawItemInfoBox
+    // (0x004C2420) calcula alto y posicion Y dividiendo por este valor.
     _DAT_055c9b70 = (float)g_ScreenW * (1.0f / 640.0f);
+    _DAT_055c9b74 = (float)g_ScreenH * (1.0f / 480.0f);
 
     return 1;
 }

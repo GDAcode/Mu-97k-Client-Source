@@ -7487,11 +7487,15 @@ void __cdecl RenderTipText_stub(int sx, int sy, char* Text) {
     // renders semi-transparent fill, then white text on top. Restores prior blend mode.
 
     // Measure text extent.
-    // 2026-07-20: IDA divide sz.cx/sz.cy por g_fScreenRate_x/y en sus SEIS usos
-    // para pasar de pixeles a unidades de layout.  En nuestro build ese global
-    // esta desincronizado del ortho/viewport reales (sale de g_ScreenW, que es
-    // una variable distinta de DAT_0056156c), asi que usamos la escala derivada
-    // del viewport de OpenGL -- ver Text_PixelToOrthoScale en stubs_externs.cpp.
+    // IDA divide sz.cx/sz.cy por g_fScreenRate_x/y en sus SEIS usos para pasar
+    // de pixeles a unidades de layout (640x480); Text_MeasureOrthoWidth hace
+    // exactamente eso.
+    //
+    // 2026-08-18: la nota anterior decia que g_fScreenRate_x estaba
+    // desincronizado del ortho porque salia de g_ScreenW, "una variable
+    // distinta de DAT_0056156c".  Resulto que en el binario son EL MISMO
+    // global; ya estan unificadas (ver Config.h) y la division vuelve a ser la
+    // del binario.
     SIZE textSize = { 0, 0 };
     SelectObject((HDC)(uintptr_t)DAT_055c9fec, (HGDIOBJ)(uintptr_t)DAT_055ca00c);  // g_hFont
     int textLen = lstrlenA(Text);
